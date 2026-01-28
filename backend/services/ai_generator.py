@@ -26,33 +26,22 @@ class AIGeneratorService:
             self.openai_client = None
 
     def expand_topic(self, topic: str) -> list[str]:
-        """
-        사용자 주제를 3가지 다른 관점의 심화 검색어로 확장합니다.
-        """
+        """사용자 주제를 3가지 다른 관점의 심화 검색어로 확장합니다."""
         if not self.gemini_client:
             return [topic]
             
-        prompt = f"""
-        당신은 전문 리서치 전략가입니다. 
-        사용자의 주제 '{topic}'에 대해 더 깊이 있고 다각적인 정보를 수집하기 위해 3개의 검색어를 생성하십시오.
-        
-        검색어는 다음 세 가지 관점을 포함해야 합니다:
-        1. 기술적 최신 트렌드 및 변화
-        2. 시장 영향력 및 비즈니스 인사이트
-        3. 실제 적용 사례 및 구체적인 데이터/통계
-        
-        결과는 반드시 JSON 리스트 형식으로만 출력하십시오. 
-        예시: ["검색어1", "검색어2", "검색어3"]
-        """
+        prompt = f"사용자의 주제 '{topic}'에 대해 리서치 키워드 3개를 JSON 리스트로 생성하세요. 관점: 기술 트렌드, 시장 영향, 적용 사례."
         try:
+            # Gemini 2.5 Flash 적용
             response = self.gemini_client.models.generate_content(
-                model='gemini-2.0-flash',
+                model='gemini-2.5-flash',
                 contents=prompt,
                 config=types.GenerateContentConfig(response_mime_type='application/json')
             )
             expanded = json.loads(response.text)
             return expanded if isinstance(expanded, list) else [topic]
-        except:
+        except Exception as e:
+            print(f"Topic expansion error: {e}")
             return [topic]
 
     def _analyze_context(self, topic: str, raw_context: str) -> str:
@@ -107,11 +96,11 @@ class AIGeneratorService:
         else: # professional
             tone_instruction = "Tone: Professional, authoritative, and concise. Use formal polite Korean (문맥에 따라 하십시오체 또는 정중한 해요체 사용)."
 
-        # 아티클 리스트를 문자열로 변환 (URL 보존 강조)
+        # 아티클 리스트를 문자열로 변환 (URL 및 이미지 보존 강조)
         articles_context = ""
         if articles:
             for i, a in enumerate(articles):
-                articles_context += f"--- Source {i+1} ---\nTitle: {a.get('title')}\nURL: {a.get('url')}\nContent: {a.get('content')}\n\n"
+                articles_context += f"--- Source {i+1} ---\nTitle: {a.get('title')}\nURL: {a.get('url')}\nAssociated Images: {a.get('associated_images', [])}\nContent: {a.get('content')}\n\n"
 
         prompt = f"""
         당신은 감성적이고 통찰력 있는 뉴스레터 **'밑미(meet me)' 스타일의 수석 에디터**입니다. 
@@ -123,7 +112,9 @@ class AIGeneratorService:
 
         [필수 작성 규칙]
         1. **1:1 아티클 매칭:** 아래 [Sources]에 제공된 각 아티클을 순서대로 하나의 블록(`main_story` 또는 `deep_dive`)으로 변환하십시오.
-        2. **링크 무결성:** 각 블록의 `link` 필드에는 반드시 해당 Source의 **실제 URL**만 넣으십시오. 절대 가공하지 마십시오.
+        2. **링크 및 이미지 강제 바인딩:** 
+           - 각 블록의 `link` 필드에는 반드시 해당 Source의 **실제 URL**을 넣으십시오.
+           - 각 블록의 `image_url` 필드에는 해당 Source와 가장 관련이 깊은 [Available Images] 내의 URL을 우선적으로 매칭하십시오. (소스 기사 본문에 포함되었을 법한 이미지를 선택하십시오.)
         3. **연결성(Bridges):** 블록과 블록 사이에는 "앞서 언급한 변화는 우리에게 이런 질문을 던집니다", "이러한 흐름 속에서 주목해야 할 또 다른 지점은..."과 같은 부드러운 연결 문구를 본문(`body`) 시작점에 포함하십시오.
         4. **전체 테마:** {refined_context}에서 분석된 핵심 인사이트를 뉴스레터 전체의 흐름으로 유지하십시오.
 
@@ -243,9 +234,9 @@ class AIGeneratorService:
                 return json.loads(response.choices[0].message.content)
             
             else:
-                # Gemini 호출 (New SDK)
+                # Gemini 호출 (Gemini 2.5 Flash 적용)
                 response = self.gemini_client.models.generate_content(
-                    model='gemini-2.0-flash',
+                    model='gemini-2.5-flash',
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         response_mime_type='application/json'

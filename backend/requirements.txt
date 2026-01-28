@@ -6,3 +6,7 @@ requests
 google-genai
 openai
 tavily-python
+beautifulsoup4
+lxml
+playwright
+playwright-stealth

@@ -36,14 +36,15 @@ export default function CreatePage() {
     setGeneratedContent(null)
     setPublishStatus('')
     
-    // 단계별 메시지 업데이트 시뮬레이션
+    // 단계별 메시지 업데이트 시뮬레이션 (Playwright 수집 단계 반영)
     const steps = [
-      { step: 10, message: '주제를 분석하여 세부 리서치 키워드를 생성 중입니다...' },
-      { step: 30, message: '다각도에서 최신 관련 자료를 수집하고 있습니다...' },
-      { step: 50, message: '수집된 아티클의 연관성을 분석하고 정제 중입니다...' },
-      { step: 70, message: '수석 편집장이 핵심 테마를 설정하고 있습니다...' },
-      { step: 85, message: '뉴스레터 본문 블록을 생성하고 이미지를 매핑 중입니다...' },
-      { step: 95, message: '최종 결과물을 정리하고 있습니다...' },
+      { step: 10, message: '주제를 분석하여 리서치 키워드를 생성 중입니다...' },
+      { step: 20, message: '웹 전반에서 최신 관련 자료를 검색하고 있습니다...' },
+      { step: 40, message: 'Playwright 브라우저를 실행하여 각 기사의 고품질 이미지를 정밀 추출 중입니다...' },
+      { step: 60, message: '수집된 이미지의 해상도와 유효성을 지능형으로 검증하고 있습니다...' },
+      { step: 75, message: 'AI 에디터가 수집된 자료를 분석하여 뉴스레터 초안을 작성 중입니다...' },
+      { step: 90, message: '블록별로 최적의 이미지를 매핑하고 레이아웃을 정리 중입니다...' },
+      { step: 98, message: '최종 결과물을 생성하고 있습니다...' },
     ]
 
     let currentStepIdx = 0
@@ -84,10 +85,11 @@ export default function CreatePage() {
   }
 
   const handlePublish = async () => {
-    if (!generatedContent) return
+    if (!generatedContent || !generatedContent.blocks) return
     setPublishStatus('발행 중...')
     
-    const htmlBody = JSON.stringify(generatedContent.blocks)
+    // 템플릿이 적용된 실제 HTML 생성
+    const htmlContent = exportToHtml(generatedContent.blocks, activeTemplate)
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/publish`, {
@@ -95,7 +97,7 @@ export default function CreatePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: generatedContent.title,
-          html_body: htmlBody
+          html: htmlContent
         }),
       })
 
@@ -175,7 +177,7 @@ export default function CreatePage() {
                     <label className="block text-sm font-medium text-slate-700 mb-2">AI 모델 선택</label>
                     <div className="flex gap-4">
                         {[
-                            { id: 'gemini', label: 'Gemini 2.0 Flash', desc: '빠르고 최신 정보에 강함' },
+                            { id: 'gemini', label: 'Gemini 2.5 Flash', desc: '초고속 및 멀티모달 최적화' },
                             { id: 'gpt', label: 'GPT-4o', desc: '논리적이고 자연스러운 문장' }
                         ].map((m) => (
                             <button
@@ -263,15 +265,65 @@ export default function CreatePage() {
                     <ChevronLeft size={18} />
                 </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                {/* Images Section */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-8">
+                {/* Sources & Grouped Images Section */}
                 <div>
-                    <h3 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-1">
-                        <ImageIcon size={14} /> 수집된 이미지
+                    <h3 className="text-xs font-bold text-slate-400 uppercase mb-4 flex items-center gap-1">
+                        <FileText size={14} /> 소스별 이미지 라이브러리
                     </h3>
-                    <div className="grid grid-cols-2 gap-2">
-                        {generatedContent.images && generatedContent.images.length > 0 ? (
-                            generatedContent.images.map((img: string, idx: number) => (
+                    
+                    <div className="space-y-6">
+                        {generatedContent.sources && generatedContent.sources.length > 0 ? (
+                            generatedContent.sources.map((source: any, sIdx: number) => (
+                                <div key={sIdx} className="space-y-3">
+                                    <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+                                        <div className="flex items-start gap-2 mb-2">
+                                            <div className="bg-blue-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded shadow-sm">S{sIdx + 1}</div>
+                                            <a href={source.url} target="_blank" rel="noreferrer" className="text-[11px] leading-tight font-semibold text-slate-800 hover:text-blue-600 hover:underline line-clamp-2">
+                                                {source.title || "제목 없음"}
+                                            </a>
+                                        </div>
+                                        
+                                        {/* Images for this specific source (Optimized Layout) */}
+                                        <div className="grid grid-cols-3 gap-2 mt-2">
+                                            {source.associated_images && source.associated_images.length > 0 ? (
+                                                source.associated_images.map((img: string, iIdx: number) => (
+                                                    <div 
+                                                        key={iIdx} 
+                                                        draggable 
+                                                        onDragStart={(e) => {
+                                                            e.dataTransfer.setData('text/plain', img);
+                                                            e.dataTransfer.effectAllowed = 'copy';
+                                                        }}
+                                                        className="aspect-square bg-slate-100 rounded-lg overflow-hidden border border-slate-100 cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-500 transition-all group relative"
+                                                    >
+                                                        <img src={img} alt={`Img ${iIdx}`} className="w-full h-full object-cover" />
+                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-1">
+                                                            <span className="text-[9px] text-white font-bold tracking-tighter">DRAG</span>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="col-span-3 text-[10px] text-slate-400 italic py-2 text-center bg-slate-50 rounded-lg border border-dashed border-slate-200">No images found</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <p className="text-sm text-slate-400 text-center py-4">수집된 자료가 없습니다.</p>
+                        )}
+                    </div>
+                </div>
+
+                {/* Global Image Pool (Fallback) */}
+                {generatedContent.images && generatedContent.images.length > 0 && (
+                    <div>
+                        <h3 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-1">
+                            <ImageIcon size={14} /> 전체 이미지 풀
+                        </h3>
+                        <div className="grid grid-cols-4 gap-1.5">
+                            {generatedContent.images.map((img: string, idx: number) => (
                                 <div 
                                     key={idx} 
                                     draggable 
@@ -279,42 +331,14 @@ export default function CreatePage() {
                                         e.dataTransfer.setData('text/plain', img);
                                         e.dataTransfer.effectAllowed = 'copy';
                                     }}
-                                    className="aspect-square bg-slate-100 rounded-lg overflow-hidden border border-slate-200 cursor-move hover:ring-2 hover:ring-blue-400 transition-all relative group"
+                                    className="aspect-square bg-slate-100 rounded border border-slate-200 cursor-move hover:ring-1 hover:ring-blue-300 transition-all"
                                 >
-                                    <img src={img} alt={`Source ${idx}`} className="w-full h-full object-cover" />
-                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <span className="text-xs text-white font-medium bg-black/50 px-2 py-1 rounded">드래그</span>
-                                    </div>
+                                    <img src={img} alt={`Global ${idx}`} className="w-full h-full object-cover" />
                                 </div>
-                            ))
-                        ) : (
-                            <p className="text-sm text-slate-400 col-span-2 text-center py-4">이미지가 없습니다.</p>
-                        )}
+                            ))}
+                        </div>
                     </div>
-                </div>
-
-                {/* Sources Section */}
-                <div>
-                    <h3 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-1">
-                        <FileText size={14} /> 참고 아티클
-                    </h3>
-                    <div className="space-y-3">
-                        {generatedContent.sources && generatedContent.sources.length > 0 ? (
-                            generatedContent.sources.map((source: any, idx: number) => (
-                                <div key={idx} className="bg-slate-50 p-3 rounded-lg border border-slate-100 text-sm">
-                                    <a href={source.url} target="_blank" rel="noreferrer" className="font-medium text-blue-600 hover:underline line-clamp-1 block mb-1">
-                                        {source.title || "제목 없음"}
-                                    </a>
-                                    <p className="text-slate-600 text-xs line-clamp-3 leading-relaxed">
-                                        {source.content || "내용 없음"}
-                                    </p>
-                                </div>
-                            ))
-                        ) : (
-                            <p className="text-sm text-slate-400 text-center py-4">참고 자료가 없습니다.</p>
-                        )}
-                    </div>
-                </div>
+                )}
             </div>
         </div>
 
