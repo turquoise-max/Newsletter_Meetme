@@ -32,6 +32,7 @@ class NewsletterRequest(BaseModel):
     tone: str = "professional"
     model_type: str = "gemini" # gemini or gpt
     language: str = "ko"
+    max_results: int = 5
 
 class Block(BaseModel):
     id: Optional[str] = None
@@ -55,8 +56,8 @@ async def generate_newsletter(request: NewsletterRequest):
         queries = ai_gen.expand_topic(request.topic)
         
         # 2. Search & Scrape (Parallel Optimization)
-        # 3개의 쿼리를 asyncio.gather로 병렬 처리하여 검색 속도 대폭 개선
-        search_tasks = [crawler.search_and_extract_async(q) for q in queries]
+        # 사용자가 요청한 개수(max_results)를 적용하여 병렬 처리
+        search_tasks = [crawler.search_and_extract_async(q, max_results=request.max_results) for q in queries]
         search_results = await asyncio.gather(*search_tasks)
         
         all_articles = []

@@ -17,6 +17,7 @@ const TEMPLATES = [
 export default function CreatePage() {
   const [topic, setTopic] = useState('')
   const [tone, setTone] = useState('professional')
+  const [articleCount, setArticleCount] = useState(5)
   const [modelType, setModelType] = useState('gemini') // 'gemini' | 'gpt'
   const [loading, setLoading] = useState(false)
   const [loadingStep, setLoadingStep] = useState(0)
@@ -147,6 +148,27 @@ export default function CreatePage() {
                         className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-800"
                         disabled={loading}
                         />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                            수집할 기사 개수: <span className="text-blue-600 font-bold">{articleCount}개</span>
+                            <span className="text-xs text-slate-400 ml-2">(검색어당 최대 개수)</span>
+                        </label>
+                        <input 
+                            type="range" 
+                            min="1" 
+                            max="10" 
+                            step="1"
+                            value={articleCount}
+                            onChange={(e) => setArticleCount(parseInt(e.target.value))}
+                            className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600 mb-2"
+                        />
+                        <div className="flex justify-between text-[10px] text-slate-400 px-1">
+                            <span>1개 (고속)</span>
+                            <span>5개 (표준)</span>
+                            <span>10개 (심층)</span>
+                        </div>
                     </div>
 
                     <div>
