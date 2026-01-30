@@ -127,12 +127,18 @@ class CrawlerService:
         """
         텍스트(HTML 또는 마크다운) 내에서 이미지 URL을 추출합니다.
         """
+        if not text:
+            return []
+            
         import re
         # HTML img 태그 및 마크다운 이미지 패턴
         html_pattern = r'<img [^>]*src="([^"]+)"'
         md_pattern = r'!\[.*?\]\((.*?)\)'
         
-        urls = re.findall(html_pattern, text) + re.findall(md_pattern, text)
+        try:
+            urls = re.findall(html_pattern, text) + re.findall(md_pattern, text)
+        except (TypeError, ValueError):
+            return []
         # 확장자 필터링 (jpg, png, webp 등) 및 절대 경로 확인
         valid_urls = [u for u in urls if any(ext in u.lower() for ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif'])]
         return list(dict.fromkeys(valid_urls)) # 중복 제거
@@ -161,13 +167,20 @@ class CrawlerService:
                 url = res.get('url')
                 if not url: return None
                 
-                print(f"Processing images for: {url}")
-                # Playwright 정밀 스크래핑 및 Tavily 원문 추출 병합
-                scraped_images = await self._scrape_images_with_playwright(url)
-                content_images = self._extract_images_from_text(res.get('raw_content', ''))
-                
-                # 중복 제거 및 지능형 필터링 (최대 3개 선별)
-                combined = list(dict.fromkeys(scraped_images + content_images))
+                try:
+                    print(f"Processing images for: {url}")
+                    # Playwright 정밀 스크래핑 및 Tavily 원문 추출 병합
+                    scraped_images = await self._scrape_images_with_playwright(url)
+                    
+                    # raw_content가 None인 경우에 대한 방어
+                    raw_content = res.get('raw_content') or ''
+                    content_images = self._extract_images_from_text(raw_content)
+                    
+                    # 중복 제거 및 지능형 필터링 (최대 3개 선별)
+                    combined = list(dict.fromkeys(scraped_images + content_images))
+                except Exception as e:
+                    print(f"Error processing article images for {url}: {e}")
+                    combined = []
                 valid_extracted = self._filter_valid_urls(combined[:10], check_image=True)[:3]
                 
                 return {
