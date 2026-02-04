@@ -1,7 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { Trash, ArrowUp, ArrowDown, Plus, Image as ImageIcon, Type, Link as LinkIcon, Minus, Quote, BarChart, Info } from 'lucide-react'
+import { Trash, ArrowUp, ArrowDown, Plus, Type, Image as ImageIcon, Link as LinkIcon, Minus, Quote, BarChart, Info } from 'lucide-react'
+import { 
+  HeaderBlock, 
+  ChapterHeaderBlock,
+  MainStoryBlock, 
+  DeepDiveBlock, 
+  ToolSpotlightBlock, 
+  StatBoxBlock, 
+  BridgeBlock, 
+  InsightBlock 
+} from './blocks/BlockComponents'
+import { commonMarkdownRenderer } from '../lib/html-exporter'
 
 interface Block {
   type: string
@@ -35,7 +46,8 @@ export default function BlockEditor({ initialBlocks, onChange, template }: Block
                  type === 'button' ? { text: '버튼 텍스트', link: '#' } :
                  type === 'quote' ? { text: '인용구 내용', author: '작성자' } :
                  type === 'stat_box' ? { value: '00%', label: '통계 라벨', description: '설명' } : 
-                 type === 'callout' ? { title: '알림', text: '내용을 입력하세요.' } : {}
+                 type === 'callout' ? { title: '알림', text: '내용을 입력하세요.' } : 
+                 type === 'chapter_header' ? { title: '새로운 챕터' } : {}
     }
     const newBlocks = [...blocks]
     newBlocks.splice(index + 1, 0, newBlock)
@@ -78,9 +90,15 @@ export default function BlockEditor({ initialBlocks, onChange, template }: Block
   const themeClass = getThemeStyles()
   const isDark = template === 'dark'
 
+  // 챕터 번호 계산 로직
+  let chapterIndex = 0;
+
   return (
-    <div className={`space-y-6 max-w-2xl mx-auto py-12 px-8 min-h-[800px] shadow-sm transition-colors duration-300 ${themeClass}`}>
-      {blocks.map((block, index) => (
+    <div className={`space-y-0 max-w-3xl mx-auto min-h-[800px] shadow-2xl transition-colors duration-300 ${themeClass}`}>
+      {blocks.map((block, index) => {
+        if (block.type === 'chapter_header') chapterIndex++;
+        
+        return (
         <div key={index} className="relative group">
             {/* Add Block Button (Top of each block) - Popover style */}
             <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -98,10 +116,12 @@ export default function BlockEditor({ initialBlocks, onChange, template }: Block
             </div>
 
             <div 
-                className={`relative rounded-xl transition-all ${
+                className={`relative transition-all w-full ${
+                    block.type === 'chapter_header' ? '' : 'px-12 py-6'
+                } ${
                     editingBlock === index 
-                    ? 'ring-2 ring-blue-500 ring-offset-2' 
-                    : 'hover:ring-1 hover:ring-slate-300 hover:ring-offset-2'
+                    ? 'ring-4 ring-blue-500/30 ring-inset z-10 bg-blue-50/10' 
+                    : 'hover:bg-slate-50/50'
                 }`}
                 onClick={() => setEditingBlock(index)}
             >
@@ -117,164 +137,70 @@ export default function BlockEditor({ initialBlocks, onChange, template }: Block
 
                 {/* Block Renderer */}
                 <div className="p-2">
-                    {/* Header Block */}
                     {block.type === 'header' && (
-                        <div className="text-center py-8 border-b border-slate-200 mb-8">
-                            {editingBlock === index ? (
-                                <div className="space-y-2">
-                                    <input 
-                                        value={block.content.title} 
-                                        onChange={(e) => updateBlock(index, { ...block.content, title: e.target.value })}
-                                        className={`text-3xl font-bold text-center w-full bg-transparent border-b border-blue-200 focus:outline-none pb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}
-                                    />
-                                    <input 
-                                        value={block.content.intro} 
-                                        onChange={(e) => updateBlock(index, { ...block.content, intro: e.target.value })}
-                                        className={`text-center w-full bg-transparent border-b border-blue-200 focus:outline-none pb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}
-                                    />
-                                </div>
-                            ) : (
-                                <>
-                                    <h1 className={`text-3xl font-bold mb-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>{block.content.title}</h1>
-                                    <p className={`${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{block.content.date} · {block.content.intro}</p>
-                                </>
-                            )}
-                        </div>
+                        <HeaderBlock 
+                            content={block.content} 
+                            isDark={isDark} 
+                            isEditing={editingBlock === index} 
+                            updateBlock={(newContent: any) => updateBlock(index, newContent)} 
+                        />
                     )}
 
-                    {/* Main Story & Image Block */}
+                    {block.type === 'chapter_header' && (
+                        <ChapterHeaderBlock 
+                            content={block.content} 
+                            isDark={isDark} 
+                            isEditing={editingBlock === index} 
+                            updateBlock={(newContent: any) => updateBlock(index, newContent)} 
+                            index={chapterIndex}
+                        />
+                    )}
+
                     {(block.type === 'main_story' || block.type === 'image') && (
-                        <div className={`rounded-xl overflow-hidden mb-8 ${isDark ? 'bg-slate-800' : 'bg-white'}`}>
-                            <div 
-                                className={`aspect-video flex items-center justify-center mb-4 rounded-lg relative overflow-hidden transition-colors ${isDark ? 'bg-slate-700' : 'bg-slate-100'} ${!block.content.image_url ? 'border-2 border-dashed border-slate-300' : ''}`}
-                                onDragOver={(e) => e.preventDefault()}
-                                onDrop={(e) => {
-                                    e.preventDefault();
-                                    const imageUrl = e.dataTransfer.getData('text/plain');
-                                    if (imageUrl) {
-                                        updateBlock(index, { ...block.content, image_url: imageUrl });
-                                    }
-                                }}
-                            >
-                                {block.content.image_url ? (
-                                    <img src={block.content.image_url} className="w-full h-full object-cover" alt="Content" />
-                                ) : (
-                                    <div className="text-center p-4 text-slate-400">
-                                        <ImageIcon className="mx-auto mb-2 opacity-50" size={32} />
-                                        <p className="text-sm font-medium">이미지를 여기에 드래그하세요</p>
-                                        <p className="text-xs mt-1 opacity-70">프롬프트: {block.content.image_prompt}</p>
-                                    </div>
-                                )}
-                            </div>
-
-                            {block.type === 'main_story' && (
-                                editingBlock === index ? (
-                                    <div className="space-y-2">
-                                        <input 
-                                            value={block.content.title} 
-                                            onChange={(e) => updateBlock(index, { ...block.content, title: e.target.value })}
-                                            className={`text-2xl font-bold w-full bg-transparent border-b border-blue-200 focus:outline-none ${isDark ? 'text-white' : 'text-slate-900'}`}
-                                        />
-                                        <textarea 
-                                            value={block.content.body} 
-                                            onChange={(e) => updateBlock(index, { ...block.content, body: e.target.value })}
-                                            className={`w-full h-32 bg-transparent border border-blue-200 rounded p-2 focus:outline-none leading-relaxed resize-none ${isDark ? 'text-slate-300' : 'text-slate-600'}`}
-                                        />
-                                    </div>
-                                ) : (
-                                    <>
-                                        <h2 className={`text-2xl font-bold mb-3 ${isDark ? 'text-white' : 'text-slate-900'}`}>{block.content.title}</h2>
-                                        <p className={`leading-relaxed mb-4 whitespace-pre-wrap ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{block.content.body}</p>
-                                        {block.content.link && (
-                                            <a href={block.content.link} className="inline-block bg-blue-600 text-white px-6 py-2 rounded-full font-medium hover:bg-blue-700 transition-colors">
-                                                {block.content.link_text || "자세히 보기"}
-                                            </a>
-                                        )}
-                                    </>
-                                )
-                            )}
-                        </div>
+                        <MainStoryBlock 
+                            content={block.content} 
+                            isDark={isDark} 
+                            isEditing={editingBlock === index} 
+                            updateBlock={(newContent: any) => updateBlock(index, newContent)} 
+                        />
                     )}
 
-                    {/* Deep Dive & Text Block */}
                     {(block.type === 'deep_dive' || block.type === 'text') && (
-                        <div className={`p-6 rounded-xl mb-8 border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                            {block.type === 'deep_dive' && (
-                                <div className="flex items-center gap-2 mb-4 text-blue-500 font-bold uppercase text-xs tracking-wider">
-                                    <span className="w-2 h-2 rounded-full bg-blue-500" /> Deep Dive
-                                </div>
-                            )}
-                            {editingBlock === index ? (
-                                <div className="space-y-2">
-                                    {block.type === 'deep_dive' && (
-                                        <input 
-                                            value={block.content.title} 
-                                            onChange={(e) => updateBlock(index, { ...block.content, title: e.target.value })}
-                                            className={`text-xl font-bold w-full bg-transparent border-b border-blue-200 focus:outline-none ${isDark ? 'text-white' : 'text-slate-900'}`}
-                                        />
-                                    )}
-                                    <textarea 
-                                        value={block.content.text || block.content.body} 
-                                        onChange={(e) => updateBlock(index, { ...block.content, [block.type === 'text' ? 'text' : 'body']: e.target.value })}
-                                        className={`w-full h-48 bg-transparent border border-blue-200 rounded p-2 focus:outline-none leading-relaxed resize-none ${isDark ? 'text-slate-300' : 'text-slate-700'}`}
-                                    />
-                                </div>
-                            ) : (
-                                <>
-                                    {block.type === 'deep_dive' && <h3 className={`text-xl font-bold mb-3 ${isDark ? 'text-white' : 'text-slate-900'}`}>{block.content.title}</h3>}
-                                    <div className={`leading-relaxed whitespace-pre-wrap ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{block.content.text || block.content.body}</div>
-                                </>
-                            )}
-                        </div>
+                        <DeepDiveBlock 
+                            content={block.content} 
+                            isDark={isDark} 
+                            isEditing={editingBlock === index} 
+                            updateBlock={(newContent: any) => updateBlock(index, newContent)} 
+                            chapterNumber={block.type === 'deep_dive' ? chapterIndex : null}
+                        />
                     )}
 
-                    {/* Tool Spotlight Block */}
                     {block.type === 'tool_spotlight' && (
-                        <div className={`flex gap-4 p-4 rounded-xl mb-8 border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
-                            <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center text-indigo-600 shrink-0">
-                                <Plus size={24} />
-                            </div>
-                            <div>
-                                <h4 className="text-sm font-bold text-indigo-500 uppercase mb-1">Tool Spotlight</h4>
-                                <h3 className={`text-lg font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>{block.content.name}</h3>
-                                <p className={`text-sm mb-2 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{block.content.description}</p>
-                                <a href={block.content.link} className="text-sm font-medium text-indigo-600 hover:underline">사용해보기 →</a>
-                            </div>
-                        </div>
+                        <ToolSpotlightBlock content={block.content} isDark={isDark} />
                     )}
 
-                    {/* Quick Hits Block */}
-                    {block.type === 'quick_hits' && (
-                        <div className={`p-6 rounded-xl mb-8 ${isDark ? 'bg-slate-800' : 'bg-slate-50'}`}>
-                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-200 pb-2">
-                                {block.content.title}
-                            </h3>
-                            <ul className="space-y-3">
-                                {block.content.items?.map((item: any, i: number) => (
-                                    <li key={i} className="flex gap-2">
-                                        <span className="text-blue-500 font-bold">•</span>
-                                        {editingBlock === index ? (
-                                            <input 
-                                                value={item.text}
-                                                onChange={(e) => {
-                                                    const newItems = [...block.content.items]
-                                                    newItems[i] = { ...item, text: e.target.value }
-                                                    updateBlock(index, { ...block.content, items: newItems })
-                                                }}
-                                                className={`bg-transparent border-b border-blue-200 focus:outline-none w-full ${isDark ? 'text-white' : 'text-slate-700'}`}
-                                            />
-                                        ) : (
-                                            <a href={item.link} className={`hover:text-blue-600 hover:underline transition-colors ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                                                {item.text}
-                                            </a>
-                                        )}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
+                    {block.type === 'stat_box' && (
+                        <StatBoxBlock content={block.content} isDark={isDark} />
                     )}
 
-                    {/* Quote Block */}
+                    {block.type === 'bridge' && (
+                        <BridgeBlock 
+                            content={block.content} 
+                            isDark={isDark} 
+                            isEditing={editingBlock === index} 
+                            updateBlock={(newContent: any) => updateBlock(index, newContent)} 
+                        />
+                    )}
+
+                    {block.type === 'insight' && (
+                        <InsightBlock 
+                            content={block.content} 
+                            isEditing={editingBlock === index} 
+                            updateBlock={(newContent: any) => updateBlock(index, newContent)} 
+                        />
+                    )}
+
+                    {/* Simple blocks remain inline for now or can be extracted further */}
                     {block.type === 'quote' && (
                         <div className="py-6 px-8 mb-8 text-center">
                             <Quote className="mx-auto mb-4 text-blue-300 opacity-50" size={32} />
@@ -300,97 +226,13 @@ export default function BlockEditor({ initialBlocks, onChange, template }: Block
                         </div>
                     )}
 
-                    {/* Stat Box Block */}
-                    {block.type === 'stat_box' && (
-                        <div className={`p-6 rounded-xl mb-8 flex items-center justify-between border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-blue-50 border-blue-100'}`}>
-                            <div>
-                                <h4 className={`text-sm font-bold uppercase tracking-wider mb-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{block.content.label}</h4>
-                                <p className={`text-sm ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{block.content.description}</p>
-                            </div>
-                            <div className="text-4xl font-black text-blue-600 tracking-tighter">
-                                {block.content.value}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Callout Block */}
-                    {block.type === 'callout' && (
-                        <div className={`p-4 rounded-lg mb-8 flex gap-3 ${isDark ? 'bg-slate-800 border border-slate-700' : 'bg-yellow-50 border border-yellow-100'}`}>
-                            <Info className={`shrink-0 ${isDark ? 'text-blue-400' : 'text-yellow-600'}`} />
-                            <div>
-                                {editingBlock === index ? (
-                                    <>
-                                        <input 
-                                            value={block.content.title}
-                                            onChange={(e) => updateBlock(index, { ...block.content, title: e.target.value })}
-                                            className={`font-bold w-full bg-transparent border-b border-blue-200 focus:outline-none mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}
-                                        />
-                                        <textarea 
-                                            value={block.content.text}
-                                            onChange={(e) => updateBlock(index, { ...block.content, text: e.target.value })}
-                                            className={`w-full bg-transparent border-b border-blue-200 focus:outline-none resize-none ${isDark ? 'text-slate-300' : 'text-slate-700'}`}
-                                        />
-                                    </>
-                                ) : (
-                                    <>
-                                        <h4 className={`font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>{block.content.title}</h4>
-                                        <p className={`text-sm ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{block.content.text}</p>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Insight Block */}
-                    {block.type === 'insight' && (
-                        <div className="border-l-4 border-blue-500 pl-6 py-2 mb-8 bg-blue-50 rounded-r-lg">
-                            <h3 className="font-bold text-blue-800 mb-1">💡 Insight</h3>
-                            {editingBlock === index ? (
-                                <textarea 
-                                    value={block.content.text} 
-                                    onChange={(e) => updateBlock(index, { ...block.content, text: e.target.value })}
-                                    className="w-full bg-transparent border-b border-blue-200 focus:outline-none text-blue-900 leading-relaxed resize-none"
-                                />
-                            ) : (
-                                <p className="text-blue-900 italic leading-relaxed">{block.content.text}</p>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Button Block */}
-                    {block.type === 'button' && (
-                        <div className="text-center mb-8">
-                            {editingBlock === index ? (
-                                <div className="space-y-2">
-                                    <input 
-                                        value={block.content.text} 
-                                        onChange={(e) => updateBlock(index, { ...block.content, text: e.target.value })}
-                                        className="text-center bg-transparent border-b border-blue-200 focus:outline-none"
-                                        placeholder="버튼 텍스트"
-                                    />
-                                    <input 
-                                        value={block.content.link} 
-                                        onChange={(e) => updateBlock(index, { ...block.content, link: e.target.value })}
-                                        className="text-center text-sm text-slate-400 bg-transparent border-b border-blue-200 focus:outline-none"
-                                        placeholder="링크 URL"
-                                    />
-                                </div>
-                            ) : (
-                                <a href={block.content.link} className="inline-block bg-blue-600 text-white px-8 py-3 rounded-full font-bold hover:bg-blue-700 transition-colors shadow-md">
-                                    {block.content.text}
-                                </a>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Divider Block */}
                     {block.type === 'divider' && (
                         <hr className={`my-8 border-t-2 ${isDark ? 'border-slate-700' : 'border-slate-100'}`} />
                     )}
                 </div>
             </div>
         </div>
-      ))}
+      )})}
       
       {/* Add Block Button (Bottom) - Popover style */}
       <div className="relative pb-12 text-center">
@@ -412,8 +254,10 @@ export default function BlockEditor({ initialBlocks, onChange, template }: Block
 
 function AddBlockMenu({ onSelect, onClose }: { onSelect: (type: string) => void, onClose: () => void }) {
     const menuItems = [
+        { type: 'chapter_header', label: '챕터 헤더', icon: Type },
         { type: 'text', label: '텍스트', icon: Type },
         { type: 'image', label: '이미지', icon: ImageIcon },
+        { type: 'bridge', label: '브릿지', icon: Minus },
         { type: 'quote', label: '인용구', icon: Quote },
         { type: 'stat_box', label: '통계', icon: BarChart },
         { type: 'callout', label: '콜아웃', icon: Info },

@@ -3,9 +3,11 @@ from google import genai
 from google.genai import types
 import json
 import traceback
+import re
 from datetime import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
+from utils.json_parser import parse_ai_json
 
 load_dotenv()
 
@@ -104,19 +106,24 @@ class AIGeneratorService:
 
         prompt = f"""
         당신은 감성적이고 통찰력 있는 뉴스레터 **'밑미(meet me)' 스타일의 수석 에디터**입니다. 
-        당신의 목표는 '{topic}'에 관해 독자에게 깊은 울림을 주는 뉴스레터를 발행하는 것입니다.
+        당신의 목표는 '{topic}'에 관해 독자에게 깊은 정보와 울림을 주는 풍성한 뉴스레터를 발행하는 것입니다.
 
         {tone_instruction}
         주요 언어: 한국어 (Korean/Hangul).
         오늘의 날짜: {today_date}
 
         [필수 작성 규칙]
-        1. **1:1 아티클 매칭:** 아래 [Sources]에 제공된 각 아티클을 순서대로 하나의 블록(`main_story` 또는 `deep_dive`)으로 변환하십시오.
-        2. **링크 및 이미지 강제 바인딩:** 
-           - 각 블록의 `link` 필드에는 반드시 해당 Source의 **실제 URL**을 넣으십시오.
-           - 각 블록의 `image_url` 필드에는 해당 Source와 가장 관련이 깊은 [Available Images] 내의 URL을 우선적으로 매칭하십시오. (소스 기사 본문에 포함되었을 법한 이미지를 선택하십시오.)
-        3. **연결성(Bridges):** 블록과 블록 사이에는 "앞서 언급한 변화는 우리에게 이런 질문을 던집니다", "이러한 흐름 속에서 주목해야 할 또 다른 지점은..."과 같은 부드러운 연결 문구를 본문(`body`) 시작점에 포함하십시오.
-        4. **전체 테마:** {refined_context}에서 분석된 핵심 인사이트를 뉴스레터 전체의 흐름으로 유지하십시오.
+        1. **챕터 기반 스토리텔링:** 
+           - 뉴스레터를 3개의 명확한 챕터로 나누십시오.
+           - 각 챕터는 `[bridge (챕터 제목) -> main_story -> deep_dive -> tool_spotlight]` 순서의 논리적 흐름을 가져야 합니다.
+           - 단순히 아티클을 나열하지 말고, 하나의 주제가 심화되는 과정을 보여주십시오.
+        2. **극도로 압축된 스토리텔링 (Skimmable):** 
+           - 독자가 3초 안에 핵심을 파악할 수 있도록 작성하십시오.
+           - `main_story`는 약 300자 내외로, 서술보다는 핵심 요약문 위주로 작성하십시오. (1~2문장 뒤에 불렛 포인트 나열)
+           - `deep_dive`는 약 400자 내외로 줄이되, 문장보다는 **불렛 포인트(리스트)**를 적극 활용하십시오 (텍스트의 70% 이상).
+           - **이미지를 절대 포함하지 마십시오.** 오직 텍스트 분석에만 집중하십시오.
+        5. **1:1 아티클 매칭:** 제공된 각 아티클 원천을 하나의 블록과 정확히 매칭하십시오.
+        6. **텍스트 포맷팅:** 강조는 오직 HTML 태그 `<strong>`만 사용하십시오. 마크다운 `**`은 금지입니다.
 
         [Sources]
         {articles_context}
@@ -129,50 +136,53 @@ class AIGeneratorService:
         뉴스레터는 '블록(Block)' 단위로 구성됩니다. 
         **최소 10개 이상의 블록**을 포함하여 깊이 있는 뉴스레터를 만드십시오.
 
-        사용 가능한 블록 타입 및 스키마:
+        사용 가능한 블록 타입 및 상세 분량 가이드:
         
-        1. header (헤더): 뉴스레터 시작
+        1. header (헤더)
         {{
             "type": "header",
             "content": {{
                 "title": "뉴스레터 메인 타이틀 (매력적으로)",
-                "date": "2026년 1월 27일",
-                "intro": "독자에게 건네는 매력적인 인사말 (2-3문장)"
+                "date": "{today_date}",
+                "intro": "독자의 관심을 끌 수 있는 따뜻하고 전문적인 오프닝 인사 (4-5문장 이상)"
             }}
         }}
 
-        2. main_story (메인 기사): 가장 중요한 뉴스. 이미지 필수.
+        2. chapter_header (챕터 구분): **명확한 챕터 시작을 알리는 블록**
+        {{
+            "type": "chapter_header",
+            "content": {{
+                "title": "챕터의 핵심 주제 (짧고 강렬하게)"
+            }}
+        }}
+
+        3. bridge (브릿지): **블록 사이의 흐름을 잇는 독립 블록**
+        {{
+            "type": "bridge",
+            "content": {{
+                "text": "이전 블록과 다음 블록의 맥락을 부드럽게 이어주는 1~2문장의 감성적인 연결 문구"
+            }}
+        }}
+
+        3. main_story (메인 기사): **압축적이고 임팩트 있는 서술 (이미지 포함, 최소 3개 필수)**
         {{
             "type": "main_story",
             "content": {{
-                "title": "강력한 헤드라인",
-                "image_url": "Context에서 찾은 관련 이미지 URL (없으면 null)",
-                "image_prompt": "기사 내용을 잘 나타내는 고품질 이미지 프롬프트 (image_url이 없을 때 사용)",
-                "body": "상세한 본문 내용 (4-5단락 이상). 마크다운을 사용하여 가독성을 높이십시오.",
-                "link": "원문 링크",
-                "link_text": "전체 기사 읽기"
+                "title": "강력하고 매력적인 헤드라인",
+                "image_url": "URL",
+                "image_prompt": "프롬프트",
+                "body": "300자 내외의 압축된 요약. 1~2개 문장 뒤에 불렛 포인트로 핵심 내용을 나열하십시오.",
+                "link": "URL",
+                "link_text": "원문에서 더 자세히 읽어보기"
             }}
         }}
 
-        3. deep_dive (심층 분석): 특정 주제에 대한 깊이 있는 분석.
+        4. deep_dive (심층 분석): **텍스트 중심의 밀도 높은 인사이트 분석**
         {{
             "type": "deep_dive",
             "content": {{
-                "title": "심층 분석: [주제]",
-                "body": "전문적인 시각에서의 분석 내용 (긴 호흡의 글). 인사이트를 포함하십시오."
-            }}
-        }}
-
-        4. quick_hits (단신 모음): 짧은 뉴스 리스트. (여러 번 사용 가능)
-        {{
-            "type": "quick_hits",
-            "content": {{
-                "title": "놓치면 안 될 뉴스 / 업계 단신",
-                "items": [
-                    {{ "text": "뉴스 1 핵심 요약", "link": "URL" }},
-                    {{ "text": "뉴스 2 핵심 요약", "link": "URL" }},
-                    {{ "text": "뉴스 3 핵심 요약", "link": "URL" }}
-                ]
+                "title": "인사이트: [주제]",
+                "body": "400자 내외의 리스트 중심 분석. 서술형 문장은 최소화하고 <strong>핵심 내용</strong>을 불렛 포인트로 요약하여 전달하십시오."
             }}
         }}
 
@@ -181,7 +191,7 @@ class AIGeneratorService:
             "type": "tool_spotlight",
             "content": {{
                 "name": "도구 이름",
-                "description": "이 도구가 유용한 이유와 주요 기능 설명",
+                "description": "이 도구가 유용한 이유와 주요 기능 설명 (3-4문장으로 상세히)",
                 "link": "URL"
             }}
         }}
@@ -243,21 +253,8 @@ class AIGeneratorService:
                     )
                 )
                 
-                # JSON 파싱
-                try:
-                    # New SDK response structure
-                    result = json.loads(response.text)
-                    return result
-                except json.JSONDecodeError:
-                    clean_text = response.text.strip()
-                    if clean_text.startswith("```json"):
-                        clean_text = clean_text.replace("```json", "", 1)
-                    if clean_text.startswith("```"):
-                        clean_text = clean_text.replace("```", "", 1)
-                    if clean_text.endswith("```"):
-                        clean_text = clean_text.rsplit("```", 1)[0]
-                    
-                    return json.loads(clean_text.strip())
+                # 중앙 집중화된 JSON 파싱 유틸리티 사용
+                return parse_ai_json(response.text)
                 
         except Exception as e:
             print("=== AIGeneratorService 오류 발생 ===")
