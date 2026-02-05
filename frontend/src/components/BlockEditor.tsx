@@ -5,10 +5,11 @@ import { Trash, ArrowUp, ArrowDown, Plus, Type, Image as ImageIcon, Link as Link
 import { 
   HeaderBlock, 
   ChapterHeaderBlock,
+  QuickSummaryBlock,
+  ShortNewsBlock,
   MainStoryBlock, 
   DeepDiveBlock, 
   ToolSpotlightBlock, 
-  StatBoxBlock, 
   BridgeBlock, 
   InsightBlock 
 } from './blocks/BlockComponents'
@@ -47,7 +48,9 @@ export default function BlockEditor({ initialBlocks, onChange, template }: Block
                  type === 'quote' ? { text: '인용구 내용', author: '작성자' } :
                  type === 'stat_box' ? { value: '00%', label: '통계 라벨', description: '설명' } : 
                  type === 'callout' ? { title: '알림', text: '내용을 입력하세요.' } : 
-                 type === 'chapter_header' ? { title: '새로운 챕터' } : {}
+                 type === 'chapter_header' ? { title: '새로운 챕터' } :
+                 type === 'quick_summary' ? { items: ['요약 1', '요약 2', '요약 3'] } :
+                 type === 'short_news' ? { title: 'News Briefs', news_items: [] } : {}
     }
     const newBlocks = [...blocks]
     newBlocks.splice(index + 1, 0, newBlock)
@@ -156,6 +159,14 @@ export default function BlockEditor({ initialBlocks, onChange, template }: Block
                         />
                     )}
 
+                    {block.type === 'quick_summary' && (
+                        <QuickSummaryBlock content={block.content} isDark={isDark} />
+                    )}
+
+                    {block.type === 'short_news' && (
+                        <ShortNewsBlock content={block.content} isDark={isDark} />
+                    )}
+
                     {(block.type === 'main_story' || block.type === 'image') && (
                         <MainStoryBlock 
                             content={block.content} 
@@ -177,10 +188,6 @@ export default function BlockEditor({ initialBlocks, onChange, template }: Block
 
                     {block.type === 'tool_spotlight' && (
                         <ToolSpotlightBlock content={block.content} isDark={isDark} />
-                    )}
-
-                    {block.type === 'stat_box' && (
-                        <StatBoxBlock content={block.content} isDark={isDark} />
                     )}
 
                     {block.type === 'bridge' && (
@@ -255,11 +262,11 @@ export default function BlockEditor({ initialBlocks, onChange, template }: Block
 function AddBlockMenu({ onSelect, onClose }: { onSelect: (type: string) => void, onClose: () => void }) {
     const menuItems = [
         { type: 'chapter_header', label: '챕터 헤더', icon: Type },
+        { type: 'quick_summary', label: '퀵 서머리', icon: BarChart },
+        { type: 'short_news', label: '단신 뉴스', icon: Quote },
         { type: 'text', label: '텍스트', icon: Type },
         { type: 'image', label: '이미지', icon: ImageIcon },
         { type: 'bridge', label: '브릿지', icon: Minus },
-        { type: 'quote', label: '인용구', icon: Quote },
-        { type: 'stat_box', label: '통계', icon: BarChart },
         { type: 'callout', label: '콜아웃', icon: Info },
         { type: 'divider', label: '구분선', icon: Minus },
         { type: 'button', label: '버튼', icon: LinkIcon },

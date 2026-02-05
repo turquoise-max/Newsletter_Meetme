@@ -52,8 +52,8 @@ async def root():
 @app.post("/api/generate", response_model=NewsletterResponse)
 async def generate_newsletter(request: NewsletterRequest):
     try:
-        # 1. Expand topic to 3 deep-dive queries
-        queries = ai_gen.expand_topic(request.topic)
+        # 1. Expand topic 삭제 -> 원본 주제만 사용
+        queries = [request.topic]
         
         # 2. Search & Scrape (Parallel Optimization)
         # 사용자가 요청한 개수(max_results)를 적용하여 병렬 처리
@@ -67,7 +67,7 @@ async def generate_newsletter(request: NewsletterRequest):
         for i, res in enumerate(search_results):
             all_articles.extend(res.get('articles', []))
             all_images.extend(res.get('images', []))
-            combined_context += f"--- Query: {queries[i]} ---\n{res.get('context', '')}\n\n"
+            combined_context += f"{res.get('context', '')}\n\n"
         
         # Deduplicate images while preserving order
         unique_images = list(dict.fromkeys(all_images))

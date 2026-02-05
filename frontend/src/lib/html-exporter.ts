@@ -7,11 +7,14 @@ interface Block {
  * 에디터와 내보내기에서 공통으로 사용할 마크다운 렌더러
  */
 export const commonMarkdownRenderer = (text: string) => {
-  return (text || '').replace(/\*\*(.*?)\*\*/g, '<strong style="font-weight: 800; color: inherit;">$1</strong>');
+  return (text || '')
+    .replace(/\*\*(.*?)\*\*/g, '<strong style="font-weight: 800; color: inherit;">$1</strong>')
+    .replace(/\n/g, '<br/>');
 };
 
 export function exportToHtml(blocks: Block[], template: string = 'modern'): string {
   const styles = getStyles(template);
+  const isDark = template === 'dark';
   
   let htmlBody = '';
 
@@ -20,8 +23,9 @@ export function exportToHtml(blocks: Block[], template: string = 'modern'): stri
       case 'header':
         htmlBody += `
           <div style="${styles.headerContainer}">
-            <h1 style="${styles.headerTitle}">${block.content.title || ''}</h1>
-            <p style="${styles.headerIntro}">${block.content.date || ''} · ${block.content.intro || ''}</p>
+            <h1 style="${styles.headerTitle}">${commonMarkdownRenderer(block.content.title || '')}</h1>
+            <div style="${styles.headerIntro}">${commonMarkdownRenderer(block.content.intro || '')}</div>
+            <p style="margin-top: 24px; font-size: 13px; font-weight: 700; color: #6366f1; text-transform: uppercase; letter-spacing: 0.1em;">${block.content.date || ''}</p>
           </div>
         `;
         break;
@@ -29,13 +33,14 @@ export function exportToHtml(blocks: Block[], template: string = 'modern'): stri
       case 'main_story':
         htmlBody += `
           <div style="${styles.card}">
+            <div style="background-color: #2563eb; color: #ffffff; padding: 4px 12px; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; width: fit-content; border-bottom-right-radius: 12px;">MAIN STORY</div>
             ${block.content.image_url ? `<img src="${block.content.image_url}" alt="${block.content.title}" style="${styles.mainImage}" />` : ''}
             <div style="${styles.cardContent}">
               <h2 style="${styles.cardTitle}">${block.content.title || ''}</h2>
-              <div style="${styles.text}">${commonMarkdownRenderer(block.content.body || '').replace(/\n/g, '<br/>')}</div>
+              <div style="${styles.text}">${commonMarkdownRenderer(block.content.body || '')}</div>
               ${block.content.link ? `
-                <div style="margin-top: 20px; text-align: center;">
-                  <a href="${block.content.link}" style="${styles.button}">${block.content.link_text || '자세히 보기'}</a>
+                <div style="margin-top: 24px;">
+                  <a href="${block.content.link}" style="color: #2563eb; text-decoration: none; font-weight: bold; font-size: 14px;">🔗 ${block.content.title} 전문 보기</a>
                 </div>
               ` : ''}
             </div>
@@ -103,8 +108,40 @@ export function exportToHtml(blocks: Block[], template: string = 'modern'): stri
         htmlBody += `
           <div style="${styles.chapterContainer}">
             <div style="${styles.chapterBadge}">Chapter</div>
-            <h2 style="${styles.chapterTitle}">${block.content.title || ''}</h2>
+            <h2 style="${styles.chapterTitle}">${commonMarkdownRenderer(block.content.title || '')}</h2>
             <div style="${styles.chapterLine}"></div>
+          </div>
+        `;
+        break;
+
+      case 'quick_summary':
+        const summaryItems = (block.content.items || []).map((item: string, i: number) => `
+          <li style="margin-bottom: 12px; display: flex; align-items: flex-start;">
+            <span style="color: #3b82f6; font-weight: 900; margin-right: 12px;">0${i+1}</span>
+            <span style="color: ${styles.colors.text}; line-height: 1.6;">${commonMarkdownRenderer(item)}</span>
+          </li>
+        `).join('');
+        htmlBody += `
+          <div style="margin: 30px 40px; padding: 32px; border: 2px dashed #dbeafe; border-radius: 24px; background-color: ${template === 'dark' ? '#1e293b' : '#f8faff'};">
+            <div style="font-size: 10px; font-weight: 900; color: #2563eb; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 16px;">오늘의 핵심 요약</div>
+            <ul style="margin: 0; padding: 0; list-style: none;">${summaryItems}</ul>
+          </div>
+        `;
+        break;
+
+      case 'short_news':
+        const newsItems = (block.content.news_items || []).map((item: any) => `
+          <div style="margin-bottom: 16px;">
+            <a href="${item.link}" style="text-decoration: none; display: flex; align-items: flex-start;">
+              <span style="font-size: 18px; margin-right: 12px;">${item.emoji}</span>
+              <span style="font-size: 15px; font-weight: 700; color: ${template === 'dark' ? '#cbd5e1' : '#334155'}; border-bottom: 1px solid #e2e8f0;">${commonMarkdownRenderer(item.text)}</span>
+            </a>
+          </div>
+        `).join('');
+        htmlBody += `
+          <div style="margin: 30px 40px; padding: 32px; border: 1px solid ${styles.colors.border}; border-radius: 24px; background-color: ${template === 'dark' ? '#0f172a' : '#ffffff'};">
+            <h3 style="margin: 0 0 20px; font-size: 16px; font-weight: 900; color: ${styles.colors.heading};">${commonMarkdownRenderer(block.content.title)}</h3>
+            ${newsItems}
           </div>
         `;
         break;
@@ -134,30 +171,19 @@ export function exportToHtml(blocks: Block[], template: string = 'modern'): stri
         `;
         break;
 
-      case 'quote':
-        htmlBody += `
-          <blockquote style="${styles.quoteContainer}">
-            <p style="${styles.quoteText}">"${block.content.text || ''}"</p>
-            <cite style="${styles.quoteAuthor}">— ${block.content.author || ''}</cite>
-          </blockquote>
-        `;
-        break;
-
-      case 'stat_box':
-        htmlBody += `
-          <div style="${styles.statContainer}">
-            <div style="${styles.statValue}">${block.content.value || ''}</div>
-            <div style="${styles.statLabel}">${block.content.label || ''}</div>
-            <div style="${styles.statDesc}">${block.content.description || ''}</div>
-          </div>
-        `;
-        break;
-
       case 'insight':
         htmlBody += `
           <div style="${styles.insightContainer}">
-            <div style="font-weight: bold; margin-bottom: 5px; color: ${styles.colors.primary};">💡 에디터의 인사이트</div>
-            <div style="${styles.text}">${commonMarkdownRenderer(block.content.text || '').replace(/\n/g, '<br/>')}</div>
+            <div style="font-weight: 900; margin-bottom: 16px; color: ${isDark ? '#6366f1' : '#1e40af'}; font-size: 18px; letter-spacing: -0.02em;">💡 Strategic Insight</div>
+            <div style="${styles.text}">${commonMarkdownRenderer(block.content.text || '')}</div>
+            <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid ${styles.colors.border};">
+              <p style="margin: 0 0 16px; font-size: 15px; font-weight: 700; color: ${styles.colors.heading}; text-align: center;">오늘의 레터 어떠셨나요?</p>
+              <div style="text-align: center;">
+                <a href="#" style="display: inline-block; margin: 0 12px; font-size: 14px; color: #4f46e5; text-decoration: underline; font-weight: 600;">피드백 남기기</a>
+                <span style="color: #e2e8f0;">|</span>
+                <a href="#" style="display: inline-block; margin: 0 12px; font-size: 14px; color: #4f46e5; text-decoration: underline; font-weight: 600;">이 레터 구독하기</a>
+              </div>
+            </div>
           </div>
         `;
         break;
@@ -242,27 +268,18 @@ function getStyles(template: string) {
     toolLabel: `display: inline-block; font-size: 10px; font-weight: 900; color: ${colors.primary}; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 12px; background-color: ${isDark ? '#1e293b' : '#eff6ff'}; padding: 4px 8px; border-radius: 6px;`,
     toolName: `margin: 0 0 12px; font-size: 20px; font-weight: 900; color: ${colors.heading};`,
     
-    quoteContainer: `margin: 30px 0; padding: 20px 40px; border-top: 1px solid ${colors.border}; border-bottom: 1px solid ${colors.border}; text-align: center;`,
-    quoteText: `margin: 0 0 10px; font-size: 18px; font-style: italic; color: ${colors.heading};`,
-    quoteAuthor: `font-size: 14px; color: #64748b;`,
-    
-    statContainer: `margin-bottom: 30px; padding: 32px 24px; text-align: center; background-color: ${isDark ? '#3b82f6' : '#eff6ff'}; border: 1px solid ${isDark ? '#2563eb' : '#dbeafe'}; border-radius: 16px;`,
-    statValue: `font-size: 48px; font-weight: 800; color: ${isDark ? '#ffffff' : '#2563eb'}; margin-bottom: 8px; line-height: 1;`,
-    statLabel: `font-size: 16px; font-weight: 700; color: ${isDark ? '#bfdbfe' : '#1e40af'}; text-transform: uppercase; letter-spacing: 0.05em;`,
-    statDesc: `font-size: 13px; color: ${isDark ? '#93c5fd' : '#64748b'}; margin-top: 12px; line-height: 1.5;`,
-    
-    insightContainer: `margin-bottom: 30px; padding: 20px; background-color: ${isDark ? '#334155' : '#eff6ff'}; border-radius: 8px; border: 1px solid ${isDark ? '#475569' : '#dbeafe'};`,
+    insightContainer: `margin: 40px; padding: 40px; background-color: ${isDark ? '#1e293b' : '#f8faff'}; border-radius: 32px; border-left: 8px solid ${isDark ? '#6366f1' : '#4f46e5'};`,
     
     divider: `border: 0; border-top: 1px solid ${colors.border}; margin: 30px 0;`,
 
     bridgeContainer: `margin: 30px 0; text-align: center; padding: 30px 40px; border-top: 2px dashed ${isDark ? '#334155' : '#e2e8f0'}; border-bottom: 2px dashed ${isDark ? '#334155' : '#e2e8f0'}; background-color: ${isDark ? 'rgba(30, 41, 59, 0.5)' : 'rgba(239, 246, 255, 0.2)'};`,
     bridgeText: `margin: 0; font-size: 17px; font-weight: 700; color: ${isDark ? '#93c5fd' : '#1d4ed8'}; line-height: 1.6; letter-spacing: -0.02em;`,
     
-    chapterContainer: `margin: 0; padding: 80px 40px; background-color: ${isDark ? '#312e81' : '#4f46e5'}; border-radius: 0; text-align: center; color: #ffffff;`,
-    chapterBadge: `display: inline-block; padding: 6px 16px; background-color: rgba(255,255,255,0.2); border-radius: 100px; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.25em; margin-bottom: 24px;`,
-    chapterTitle: `margin: 0; font-size: 42px; font-black: 900; line-height: 1.1; letter-spacing: -0.05em;`,
-    chapterLine: `width: 60px; height: 6px; background-color: rgba(255,255,255,0.3); margin: 40px auto 0; border-radius: 3px;`,
+    chapterContainer: `margin: 0; padding: 40px 40px; background-color: ${isDark ? '#312e81' : '#4f46e5'}; border-radius: 0; text-align: center; color: #ffffff;`,
+    chapterBadge: `display: inline-block; padding: 4px 12px; background-color: rgba(255,255,255,0.2); border-radius: 100px; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 12px;`,
+    chapterTitle: `margin: 0; font-size: 28px; font-weight: 900; line-height: 1.2; letter-spacing: -0.03em;`,
+    chapterLine: `width: 40px; height: 4px; background-color: rgba(255,255,255,0.3); margin: 20px auto 0; border-radius: 2px;`,
 
-    footer: `text-align: center; font-size: 12px; color: #94a3b8; margin-top: 40px; border-top: 1px solid ${colors.border}; padding-top: 20px;`,
+    footer: `text-align: center; font-size: 12px; color: #94a3b8; margin-top: 60px; border-top: 1px solid ${colors.border}; padding-top: 30px;`,
   };
 }

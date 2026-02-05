@@ -27,25 +27,6 @@ class AIGeneratorService:
         else:
             self.openai_client = None
 
-    def expand_topic(self, topic: str) -> list[str]:
-        """사용자 주제를 3가지 다른 관점의 심화 검색어로 확장합니다."""
-        if not self.gemini_client:
-            return [topic]
-            
-        prompt = f"사용자의 주제 '{topic}'에 대해 리서치 키워드 3개를 JSON 리스트로 생성하세요. 관점: 기술 트렌드, 시장 영향, 적용 사례."
-        try:
-            # Gemini 2.5 Flash 적용
-            response = self.gemini_client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=prompt,
-                config=types.GenerateContentConfig(response_mime_type='application/json')
-            )
-            expanded = json.loads(response.text)
-            return expanded if isinstance(expanded, list) else [topic]
-        except Exception as e:
-            print(f"Topic expansion error: {e}")
-            return [topic]
-
     def _analyze_context(self, topic: str, raw_context: str) -> str:
         """
         Tavily 검색 결과들 사이의 공통점과 연관성을 분석하여 정제된 문맥을 생성합니다.
@@ -105,25 +86,33 @@ class AIGeneratorService:
                 articles_context += f"--- Source {i+1} ---\nTitle: {a.get('title')}\nURL: {a.get('url')}\nAssociated Images: {a.get('associated_images', [])}\nContent: {a.get('content')}\n\n"
 
         prompt = f"""
-        당신은 감성적이고 통찰력 있는 뉴스레터 **'밑미(meet me)' 스타일의 수석 에디터**입니다. 
-        당신의 목표는 '{topic}'에 관해 독자에게 깊은 정보와 울림을 주는 풍성한 뉴스레터를 발행하는 것입니다.
+        당신은 감성적이고 통찰력 있는 뉴스레터 전문 수석 에디터입니다. 
+        당신의 목표는 '{topic}'에 관해 독자에게 깊은 정보와 울림을 주는 마키나락스형 매거진 스타일의 뉴스레터를 발행하는 것입니다.
 
-        {tone_instruction}
-        주요 언어: 한국어 (Korean/Hangul).
-        오늘의 날짜: {today_date}
+        [스타일 가이드]
+        1. **톤앤매너**: 격식 있는 대화체(~해요, ~입니다). 전문 용어는 반드시 문맥으로 풀어서 설명하세요.
+        2. **오프닝 필수 문구**: 상단 인사는 반드시 "안녕하세요, 오픈해 주셔서 감사합니다"로 시작하세요.
+        3. **시각적 구조**: 문단 사이 충분한 여백, 핵심 키워드는 `<strong>` 태그로 **굵게** 강조하세요. (마크다운 `**` 금지)
+        4. **가독성 규칙**: 
+           - 한 문단은 **최대 3줄**을 넘지 않아야 합니다.
+           - 불렛 포인트(•)와 내용에 어울리는 이모지(🚀, 💡, 📊 등)를 적극 활용하세요.
+
+        [뉴스레터 구성 순서]
+        1. **오프닝 (header)**: "안녕하세요, 오픈해 주셔서 감사합니다"로 시작. 독자의 고민이나 질문(Hook)으로 시작해 주제의 가치를 2~3문장으로 설명하세요.
+        2. **오늘의 퀵 서머리 (quick_summary)**: 이번 호의 핵심 요약 3문장을 배치하세요.
+        3. **챕터 구성 (chapter_header -> main_story -> deep_dive -> tool_spotlight)**:
+           - 뉴스레터를 **최소 2개에서 최대 4개**의 명확한 챕터로 나누세요.
+           - **중요**: 각 챕터에는 반드시 **딱 1개의 main_story** 블록만 배치해야 합니다.
+           - `main_story`: 배경 -> 해결 -> 이득 구조로 300자 내외 압축 서술.
+        4. **단신 리스트 (short_news)**: 관련 뉴스 3~5개를 이모지와 함께 구성하세요. 각 뉴스 제목은 기사 내용을 분석한 날카로운 **한 줄 요약**이어야 합니다.
+        5. **클로징 (insight)**: 단순히 마무리가 아닌, 전체 뉴스레터 내용을 종합하여 독자가 얻을 수 있는 **전략적 통찰과 핵심 시사점**을 깊이 있게 담으세요.
 
         [필수 작성 규칙]
-        1. **챕터 기반 스토리텔링:** 
-           - 뉴스레터를 3개의 명확한 챕터로 나누십시오.
-           - 각 챕터는 `[bridge (챕터 제목) -> main_story -> deep_dive -> tool_spotlight]` 순서의 논리적 흐름을 가져야 합니다.
-           - 단순히 아티클을 나열하지 말고, 하나의 주제가 심화되는 과정을 보여주십시오.
-        2. **극도로 압축된 스토리텔링 (Skimmable):** 
-           - 독자가 3초 안에 핵심을 파악할 수 있도록 작성하십시오.
-           - `main_story`는 약 300자 내외로, 서술보다는 핵심 요약문 위주로 작성하십시오. (1~2문장 뒤에 불렛 포인트 나열)
-           - `deep_dive`는 약 400자 내외로 줄이되, 문장보다는 **불렛 포인트(리스트)**를 적극 활용하십시오 (텍스트의 70% 이상).
-           - **이미지를 절대 포함하지 마십시오.** 오직 텍스트 분석에만 집중하십시오.
-        5. **1:1 아티클 매칭:** 제공된 각 아티클 원천을 하나의 블록과 정확히 매칭하십시오.
-        6. **텍스트 포맷팅:** 강조는 오직 HTML 태그 `<strong>`만 사용하십시오. 마크다운 `**`은 금지입니다.
+        1. **Benefit-Driven**: '그래서 독자에게 무엇이 좋은가?'에 집중하세요.
+        2. **이미지 안내**: `main_story`의 이미지 캡션 필드에 "이미지를 클릭하면 전문으로 연결됩니다"를 포함하세요.
+
+        주요 언어: 한국어 (Korean/Hangul).
+        오늘의 날짜: {today_date}
 
         [Sources]
         {articles_context}
@@ -136,90 +125,79 @@ class AIGeneratorService:
         뉴스레터는 '블록(Block)' 단위로 구성됩니다. 
         **최소 10개 이상의 블록**을 포함하여 깊이 있는 뉴스레터를 만드십시오.
 
-        사용 가능한 블록 타입 및 상세 분량 가이드:
+        사용 가능한 블록 타입 및 상세 가이드:
         
-        1. header (헤더)
+        1. header
         {{
             "type": "header",
             "content": {{
-                "title": "뉴스레터 메인 타이틀 (매력적으로)",
+                "title": "메인 타이틀",
                 "date": "{today_date}",
-                "intro": "독자의 관심을 끌 수 있는 따뜻하고 전문적인 오프닝 인사 (4-5문장 이상)"
+                "intro": "안녕하세요, 오픈해 주셔서 감사합니다. (독자 공감 Hook 포함)"
             }}
         }}
 
-        2. chapter_header (챕터 구분): **명확한 챕터 시작을 알리는 블록**
+        2. quick_summary
+        {{
+            "type": "quick_summary",
+            "content": {{
+                "items": ["요약문 1", "요약문 2", "요약문 3"]
+            }}
+        }}
+
+        3. chapter_header
         {{
             "type": "chapter_header",
-            "content": {{
-                "title": "챕터의 핵심 주제 (짧고 강렬하게)"
-            }}
+            "content": {{ "title": "챕터 주제" }}
         }}
 
-        3. bridge (브릿지): **블록 사이의 흐름을 잇는 독립 블록**
-        {{
-            "type": "bridge",
-            "content": {{
-                "text": "이전 블록과 다음 블록의 맥락을 부드럽게 이어주는 1~2문장의 감성적인 연결 문구"
-            }}
-        }}
-
-        3. main_story (메인 기사): **압축적이고 임팩트 있는 서술 (이미지 포함, 최소 3개 필수)**
+        4. main_story
         {{
             "type": "main_story",
             "content": {{
-                "title": "강력하고 매력적인 헤드라인",
+                "title": "헤드라인",
                 "image_url": "URL",
-                "image_prompt": "프롬프트",
-                "body": "300자 내외의 압축된 요약. 1~2개 문장 뒤에 불렛 포인트로 핵심 내용을 나열하십시오.",
+                "body": "300자 내외 [배경-해결-이득] 구조",
                 "link": "URL",
-                "link_text": "원문에서 더 자세히 읽어보기"
+                "image_caption": "이미지를 클릭하면 전문으로 연결됩니다"
             }}
         }}
 
-        4. deep_dive (심층 분석): **텍스트 중심의 밀도 높은 인사이트 분석**
+        5. deep_dive
         {{
             "type": "deep_dive",
             "content": {{
-                "title": "인사이트: [주제]",
-                "body": "400자 내외의 리스트 중심 분석. 서술형 문장은 최소화하고 <strong>핵심 내용</strong>을 불렛 포인트로 요약하여 전달하십시오."
+                "title": "분석 제목",
+                "body": "400자 내외 리스트 중심 분석"
             }}
         }}
 
-        5. tool_spotlight (도구 추천): 관련 소프트웨어나 도구 소개.
+        6. tool_spotlight
         {{
             "type": "tool_spotlight",
             "content": {{
-                "name": "도구 이름",
-                "description": "이 도구가 유용한 이유와 주요 기능 설명 (3-4문장으로 상세히)",
+                "name": "도구명",
+                "description": "기능 및 유용성 설명",
                 "link": "URL"
             }}
         }}
 
-        6. quote (인용구): 관련 인물의 발언이나 명언.
+        7. short_news
         {{
-            "type": "quote",
+            "type": "short_news",
             "content": {{
-                "text": "인용 문구",
-                "author": "발언자 이름/직함"
+                "title": "News Briefs",
+                "news_items": [
+                    {{ "emoji": "🚀", "text": "제목", "link": "URL" }}
+                ]
             }}
         }}
 
-        7. stat_box (통계 박스): 주요 숫자나 통계 강조.
-        {{
-            "type": "stat_box",
-            "content": {{
-                "value": "85%",
-                "label": "AI 도입률 증가",
-                "description": "전년 대비 기업들의 AI 도입률 수치"
-            }}
-        }}
-
-        8. insight (마무리 인사이트): 에디터의 한마디.
+        8. insight (Closing)
         {{
             "type": "insight",
             "content": {{
-                "text": "뉴스레터를 마무리하며 독자에게 남기는 생각거리나 질문."
+                "text": "오늘의 레터 어떠셨나요? (피드백 및 구독 안내 포함)"
             }}
         }}
 
